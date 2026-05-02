@@ -19,13 +19,15 @@ const MAX_ERROR = Math.PI / 180 * 45;
 export default class HipMatcher implements PoseMatcher {
 
     private isLeft: boolean;
+    private cameraRelated: boolean;
 
     private thighLocalDir: [number, number, number] = [0, 0, 0];
     private thighLocalDirMirror: [number, number, number] = [0, 0, 0];
     private crotchRotation: [number, number, number, number] = [0, 0, 0, 1];
 
-    constructor(isLeft: boolean) {
+    constructor(isLeft: boolean, cameraRelated: boolean = true) {
         this.isLeft = isLeft;
+        this.cameraRelated = cameraRelated;
     }
 
     prepare(model: SkeletonModel): void {
@@ -89,24 +91,44 @@ export default class HipMatcher implements PoseMatcher {
         const thighErrR = angleBetweenVec3(rightThighDir, !this.isLeft ? this.thighLocalDir : this.thighLocalDirMirror);
         const crotchErrR = getQuatDistance(this.crotchRotation, !this.isLeft ? crotchRotation : getQuatMirrorX(crotchRotation));
 
-        let scoreL = (Math.PI - thighErrL) * (Math.PI - crotchErrL);
-        let scoreR = (Math.PI - thighErrR) * (Math.PI - crotchErrR);
-        if (isVecZero(leftThighDir) || thighErrL > MAX_ERROR || crotchErrL > MAX_ERROR) {
+        let scoreL = 0;
+        if (this.cameraRelated) {
+            scoreL = (Math.PI - thighErrL) * (Math.PI - crotchErrL);
+        } else {
+            scoreL = Math.PI - thighErrL;
+        }
+
+        let scoreR = 0;
+        if (this.cameraRelated) {
+            scoreR = (Math.PI - thighErrR) * (Math.PI - crotchErrR);
+        } else {
+            scoreR = Math.PI - thighErrR;
+        }
+
+        if (isVecZero(leftThighDir) || thighErrL > MAX_ERROR) {
+            scoreL = -Infinity;
+        } else if (this.cameraRelated && crotchErrL > MAX_ERROR) {
             scoreL = -Infinity;
         }
-        if (isVecZero(rightThighDir) || thighErrR > MAX_ERROR || crotchErrR > MAX_ERROR) {
+
+        if (isVecZero(rightThighDir) || thighErrR > MAX_ERROR) {
+            scoreR = -Infinity;
+        } else if (this.cameraRelated && crotchErrR > MAX_ERROR) {
             scoreR = -Infinity;
         }
 
+        result.scoreP = scoreL;
+        result.scoreF = scoreR;
+        result.accepted = isFinite(scoreL) || isFinite(scoreR);
+        if (!result.accepted) return;
+
         const landmarks = photo.normalized;
         if (isFinite(scoreL) && scoreL > scoreR) {
-            result.accepted = true;
             result.score = scoreL;
             result.flipped = !this.isLeft;
             result.center = landmarks[23];
             result.related = [landmarks[24], landmarks[25], mid(landmarks[23], landmarks[11])];
         } else if (isFinite(scoreR)) {
-            result.accepted = true;
             result.score = scoreR;
             result.flipped = this.isLeft;
             result.center = landmarks[24];

@@ -3,9 +3,11 @@
          :style="{width: width + 'px', height: height + 'px'}"
          ref="dom"
     >
-        <img :src="src" alt=""
+        <!-- <img :src="src" alt=""
              :style="imgStyle"
-        >
+        > -->
+        <el-image :src="src" alt=""
+        :style="imgStyle" lazy />
     </div>
 </template>
 

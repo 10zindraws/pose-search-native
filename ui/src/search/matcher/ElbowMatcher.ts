@@ -26,6 +26,7 @@ const Z_AXIS: [number, number, number] = [0, 0, 1];
 export default class ElbowMatcher implements PoseMatcher {
 
     private isLeft: boolean;
+    private cameraRelated: boolean;
 
     private upperArmZAxisAngle: number = 0;
     private lowerArmZAxisAngle: number = 0;
@@ -35,8 +36,9 @@ export default class ElbowMatcher implements PoseMatcher {
     private upperArmLocalDirMirror: [number, number, number] = [0, 0, 0];
     private chestRotation: [number, number, number, number] = [0, 0, 0, 1];
 
-    constructor(isLeft: boolean) {
+    constructor(isLeft: boolean, cameraRelated: boolean = true) {
         this.isLeft = isLeft;
+        this.cameraRelated = cameraRelated;
     }
 
     prepare(model: SkeletonModel): void {
@@ -122,14 +124,18 @@ export default class ElbowMatcher implements PoseMatcher {
         const elbowViewAngleErrL = Math.abs(this.elbowViewAngle - elbowViewAngleL * (this.isLeft ? 1 : -1));
         const upperArmAngleErrL = angleBetweenVec3(leftUpperArmDir, this.isLeft ? this.upperArmLocalDir : this.upperArmLocalDirMirror);
         const chestErrL = getQuatDistance(this.chestRotation, this.isLeft ? chestRotation : getQuatMirrorX(chestRotation));
-        let scoreL =
-            (Math.PI - upperArmZAngleErrL)
-            + (Math.PI - lowerArmZAngleErrL)
-            + (Math.PI - elbowAngleErrL) * 2
-            + (Math.PI * 2 - elbowViewAngleErrL) * 2
-            + (Math.PI - upperArmAngleErrL)
-            + (Math.PI - chestErrL)
-        ;
+        let scoreL = 0;
+        if (this.cameraRelated) {
+            scoreL = (Math.PI - upperArmZAngleErrL)
+                + (Math.PI - lowerArmZAngleErrL)
+                + (Math.PI - elbowAngleErrL) * 2
+                + (Math.PI * 2 - elbowViewAngleErrL) * 2
+                + (Math.PI - upperArmAngleErrL)
+                + (Math.PI - chestErrL);
+        } else {
+            scoreL = (Math.PI - elbowAngleErrL) * 2
+                + (Math.PI - upperArmAngleErrL);
+        }
 
         const upperArmZAxisAngleR = angleBetweenVec3(Z_AXIS, rightUpperArmDir);
         const lowerArmZAxisAngleR = angleBetweenVec3(Z_AXIS, rightLowerArmDir);
@@ -142,45 +148,61 @@ export default class ElbowMatcher implements PoseMatcher {
         const elbowViewAngleErrR = Math.abs(this.elbowViewAngle - elbowViewAngleR * (!this.isLeft ? 1 : -1));
         const upperArmAngleErrR = angleBetweenVec3(rightUpperArmDir, !this.isLeft ? this.upperArmLocalDir : this.upperArmLocalDirMirror);
         const chestErrR = getQuatDistance(this.chestRotation, !this.isLeft ? chestRotation : getQuatMirrorX(chestRotation));
-        let scoreR =
-            (Math.PI - upperArmZAngleErrR)
-            + (Math.PI - lowerArmZAngleErrR)
-            + (Math.PI - elbowAngleErrR) * 2
-            + (Math.PI * 2 - elbowViewAngleErrR) * 2
-            + (Math.PI - upperArmAngleErrR)
-            + (Math.PI - chestErrR)
-        ;
+        let scoreR = 0;
+        if (this.cameraRelated) {
+            scoreR = (Math.PI - upperArmZAngleErrR)
+                + (Math.PI - lowerArmZAngleErrR)
+                + (Math.PI - elbowAngleErrR) * 2
+                + (Math.PI * 2 - elbowViewAngleErrR) * 2
+                + (Math.PI - upperArmAngleErrR)
+                + (Math.PI - chestErrR);
+        } else {
+            scoreR = (Math.PI - elbowAngleErrR) * 2
+                + (Math.PI - upperArmAngleErrR);
+        }
 
         if (isVecZero(leftUpperArmDir)
             || isVecZero(leftLowerArmDir)
-            || upperArmZAngleErrL > MAX_VIEW_ANGLE_ERROR
-            || lowerArmZAngleErrL > MAX_VIEW_ANGLE_ERROR
             || elbowAngleErrL > MAX_WORLD_SPACE_ANGLE_ERROR
-            || elbowViewAngleErrL > MAX_VIEW_ANGLE_ERROR
             || upperArmAngleErrL > MAX_WORLD_SPACE_ANGLE_ERROR
         ) {
             scoreL = -Infinity;
+        } else if (this.cameraRelated && (
+            upperArmZAngleErrL > MAX_VIEW_ANGLE_ERROR
+            || lowerArmZAngleErrL > MAX_VIEW_ANGLE_ERROR
+            || elbowViewAngleErrL > MAX_VIEW_ANGLE_ERROR
+            || chestErrL > MAX_VIEW_ANGLE_ERROR
+        )) {
+            scoreL = -Infinity;
         }
+
         if (isVecZero(rightUpperArmDir)
             || isVecZero(rightLowerArmDir)
-            || upperArmZAngleErrR > MAX_VIEW_ANGLE_ERROR
-            || lowerArmZAngleErrR > MAX_VIEW_ANGLE_ERROR
             || elbowAngleErrR > MAX_WORLD_SPACE_ANGLE_ERROR
-            || elbowViewAngleErrR > MAX_VIEW_ANGLE_ERROR
             || upperArmAngleErrR > MAX_WORLD_SPACE_ANGLE_ERROR
         ) {
             scoreR = -Infinity;
+        } else if (this.cameraRelated && (
+            upperArmZAngleErrR > MAX_VIEW_ANGLE_ERROR
+            || lowerArmZAngleErrR > MAX_VIEW_ANGLE_ERROR
+            || elbowViewAngleErrR > MAX_VIEW_ANGLE_ERROR
+            || chestErrR > MAX_VIEW_ANGLE_ERROR
+        )) {
+            scoreR = -Infinity;
         }
+
+        result.scoreP = scoreL;
+        result.scoreF = scoreR;
+        result.accepted = isFinite(scoreL) || isFinite(scoreR);
+        if (!result.accepted) return;
 
         const landmarks = photo.normalized;
         if (isFinite(scoreL) && scoreL > scoreR) {
-            result.accepted = true;
             result.score = scoreL;
             result.flipped = !this.isLeft;
             result.center = landmarks[13];
             result.related = [landmarks[11], landmarks[15]];
         } else if (isFinite(scoreR)) {
-            result.accepted = true;
             result.score = scoreR;
             result.flipped = this.isLeft;
             result.center = landmarks[14];

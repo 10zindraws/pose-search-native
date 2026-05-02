@@ -16,5 +16,13 @@ export default defineConfig({
     ],
     build: {
         outDir: '../server/public'
-    }
+    },
+    server: {
+        host: '0.0.0.0',
+        port: 1141,
+        https: false,
+        proxy: {
+        },
+        cors: true
+      }
 });

@@ -21,35 +21,45 @@ importScripts(
                 pose.setOptions({
                     selfieMode: false,
                     modelComplexity: 2,
-                    smoothLandmarks: false
+                    smoothLandmarks: false,
+					useCpuInference: true
                 });
 
                 const solution = pose.g;
                 const solutionConfig = solution.g;
-                solutionConfig.files = () => []; // disable default import files behavior
+                solutionConfig.files = () =>[];
                 await pose.initialize();
-                solution.D = solution.h.GL.currentContext.GLctx; // set gl ctx
+                solution.D = solution.h.GL.currentContext.GLctx;
 
-                // load data files
                 const files = solution.F;
                 files['pose_landmark_heavy.tflite'] = (await fetch('/assets/@mediapipe/pose/pose_landmark_heavy.tflite')).arrayBuffer();
                 files['pose_web.binarypb'] = (await fetch('/assets/@mediapipe/pose/pose_web.binarypb')).arrayBuffer();
 
-                // set callback
                 pose.onResults(function onResults(results) {
                     detectPoseResults = {
                         normalizedLandmarks: results?.poseLandmarks?.map(landmark => ({
                             point: [landmark.x, landmark.y, -landmark.z], visibility: landmark.visibility || 0
-                        })) || [],
+                        })) ||[],
                         worldLandmarks: results?.poseWorldLandmarks?.map(landmark => ({
                             point: [landmark.x, -landmark.y, -landmark.z], visibility: landmark.visibility || 0
-                        })) || [],
+                        })) ||[],
                     };
                 });
             }
             pose.reset();
             const bitmap = e.data;
-            await pose.send({image: bitmap});
+            
+            try {
+                // CRITICAL FIX: Reset state before send. If no pose is found, onResults won't fire.
+                detectPoseResults = null; 
+                await pose.send({image: bitmap});
+            } finally {
+                // CRITICAL FIX: Close the ImageBitmap to prevent memory leaks and worker crashes
+                if (bitmap && bitmap.close) {
+                    bitmap.close();
+                }
+            }
+            
         } catch (e) {
             detectPoseResults = null;
         }

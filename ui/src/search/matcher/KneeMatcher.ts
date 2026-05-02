@@ -26,6 +26,7 @@ const Z_AXIS: [number, number, number] = [0, 0, 1];
 export default class KneeMatcher implements PoseMatcher {
 
     private isLeft: boolean;
+    private cameraRelated: boolean;
 
     private thighZAxisAngle: number = 0;
     private calfZAxisAngle: number = 0;
@@ -35,8 +36,9 @@ export default class KneeMatcher implements PoseMatcher {
     private thighLocalDirMirror: [number, number, number] = [0, 0, 0];
     private crotchRotation: [number, number, number, number] = [0, 0, 0, 1];
 
-    constructor(isLeft: boolean) {
+    constructor(isLeft: boolean, cameraRelated: boolean = true) {
         this.isLeft = isLeft;
+        this.cameraRelated = cameraRelated;
     }
 
     prepare(model: SkeletonModel): void {
@@ -122,14 +124,18 @@ export default class KneeMatcher implements PoseMatcher {
         const kneeViewAngleErrL = Math.abs(this.kneeViewAngle - kneeViewAngleL * (this.isLeft ? 1 : -1));
         const thighAngleErrL = angleBetweenVec3(leftThighDir, this.isLeft ? this.thighLocalDir : this.thighLocalDirMirror);
         const crotchErrL = getQuatDistance(this.crotchRotation, this.isLeft ? crotchRotation : getQuatMirrorX(crotchRotation));
-        let scoreL =
-            (Math.PI - thighZAngleErrL)
-            + (Math.PI - calfZAngleErrL)
-            + (Math.PI - kneeAngleErrL) * 2
-            + (Math.PI * 2 - kneeViewAngleErrL) * 2
-            + (Math.PI - thighAngleErrL)
-            + (Math.PI - crotchErrL)
-        ;
+        let scoreL = 0;
+        if (this.cameraRelated) {
+            scoreL = (Math.PI - thighZAngleErrL)
+                + (Math.PI - calfZAngleErrL)
+                + (Math.PI - kneeAngleErrL) * 2
+                + (Math.PI * 2 - kneeViewAngleErrL) * 2
+                + (Math.PI - thighAngleErrL)
+                + (Math.PI - crotchErrL);
+        } else {
+            scoreL = (Math.PI - kneeAngleErrL) * 2
+                + (Math.PI - thighAngleErrL);
+        }
 
         const thighZAxisAngleR = angleBetweenVec3(Z_AXIS, rightThighDir);
         const calfZAxisAngleR = angleBetweenVec3(Z_AXIS, rightCalfDir);
@@ -142,45 +148,61 @@ export default class KneeMatcher implements PoseMatcher {
         const kneeViewAngleErrR = Math.abs(this.kneeViewAngle - kneeViewAngleR * (!this.isLeft ? 1 : -1));
         const thighAngleErrR = angleBetweenVec3(rightThighDir, !this.isLeft ? this.thighLocalDir : this.thighLocalDirMirror);
         const crotchErrR = getQuatDistance(this.crotchRotation, !this.isLeft ? crotchRotation : getQuatMirrorX(crotchRotation));
-        let scoreR =
-            (Math.PI - thighZAngleErrR)
-            + (Math.PI - calfZAngleErrR)
-            + (Math.PI - kneeAngleErrR) * 2
-            + (Math.PI * 2 - kneeViewAngleErrR) * 2
-            + (Math.PI - thighAngleErrR)
-            + (Math.PI - crotchErrR)
-        ;
+        let scoreR = 0;
+        if (this.cameraRelated) {
+            scoreR = (Math.PI - thighZAngleErrR)
+                + (Math.PI - calfZAngleErrR)
+                + (Math.PI - kneeAngleErrR) * 2
+                + (Math.PI * 2 - kneeViewAngleErrR) * 2
+                + (Math.PI - thighAngleErrR)
+                + (Math.PI - crotchErrR);
+        } else {
+            scoreR = (Math.PI - kneeAngleErrR) * 2
+                + (Math.PI - thighAngleErrR);
+        }
 
         if (isVecZero(leftThighDir)
             || isVecZero(leftCalfDir)
-            || thighZAngleErrL > MAX_VIEW_ANGLE_ERROR
-            || calfZAngleErrL > MAX_VIEW_ANGLE_ERROR
             || kneeAngleErrL > MAX_WORLD_SPACE_ANGLE_ERROR
-            || kneeViewAngleErrL > MAX_VIEW_ANGLE_ERROR
             || thighAngleErrL > MAX_WORLD_SPACE_ANGLE_ERROR
         ) {
             scoreL = -Infinity;
+        } else if (this.cameraRelated && (
+            thighZAngleErrL > MAX_VIEW_ANGLE_ERROR
+            || calfZAngleErrL > MAX_VIEW_ANGLE_ERROR
+            || kneeViewAngleErrL > MAX_VIEW_ANGLE_ERROR
+            || crotchErrL > MAX_VIEW_ANGLE_ERROR
+        )) {
+            scoreL = -Infinity;
         }
+
         if (isVecZero(rightThighDir)
             || isVecZero(rightCalfDir)
-            || thighZAngleErrR > MAX_VIEW_ANGLE_ERROR
-            || calfZAngleErrR > MAX_VIEW_ANGLE_ERROR
             || kneeAngleErrR > MAX_WORLD_SPACE_ANGLE_ERROR
-            || kneeViewAngleErrR > MAX_VIEW_ANGLE_ERROR
             || thighAngleErrR > MAX_WORLD_SPACE_ANGLE_ERROR
         ) {
             scoreR = -Infinity;
+        } else if (this.cameraRelated && (
+            thighZAngleErrR > MAX_VIEW_ANGLE_ERROR
+            || calfZAngleErrR > MAX_VIEW_ANGLE_ERROR
+            || kneeViewAngleErrR > MAX_VIEW_ANGLE_ERROR
+            || crotchErrR > MAX_VIEW_ANGLE_ERROR
+        )) {
+            scoreR = -Infinity;
         }
+
+        result.scoreP = scoreL;
+        result.scoreF = scoreR;
+        result.accepted = isFinite(scoreL) || isFinite(scoreR);
+        if (!result.accepted) return;
 
         const landmarks = photo.normalized;
         if (isFinite(scoreL) && scoreL > scoreR) {
-            result.accepted = true;
             result.score = scoreL;
             result.flipped = !this.isLeft;
             result.center = landmarks[25];
             result.related = [landmarks[23], landmarks[27]];
         } else if (isFinite(scoreR)) {
-            result.accepted = true;
             result.score = scoreR;
             result.flipped = this.isLeft;
             result.center = landmarks[26];

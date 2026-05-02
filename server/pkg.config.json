@@ -1,0 +1,9 @@
+{
+  "scripts": "dist/index.js",
+  "targets":["node18-win-x64"],
+  "outputPath": "dist",
+  "assets":[
+    "public/**/*",
+    "public/**"
+  ]
+}

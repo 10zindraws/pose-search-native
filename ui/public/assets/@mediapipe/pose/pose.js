@@ -1559,7 +1559,7 @@
                     g = a.h.GL.createContext(a.l, {
                         antialias: !1,
                         alpha: !1,
-                        majorVersion: 1
+                        majorVersion: 2
                     });
                     a.h.GL.makeContextCurrent(g);
                     p.g = 4;

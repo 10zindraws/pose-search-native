@@ -5,6 +5,8 @@ import FaceFeatureBuffer from './FaceFeatureBuffer';
 import LowerArmFeatureBuffer from './LowerArmFeatureBuffer';
 import ThighFeatureBuffer from './ThighFeatureBuffer';
 import UpperArmFeatureBuffer from './UpperArmFeatureBuffer';
+import HandFeatureBuffer from './HandFeatureBuffer';
+import FootFeatureBuffer from './FootFeatureBuffer';
 
 export const featureBuffers = {
     chest: new ChestFeatureBuffer(),
@@ -14,4 +16,6 @@ export const featureBuffers = {
     crotch: new CrotchFeatureBuffer(),
     thigh: new ThighFeatureBuffer(),
     calf: new CalfFeatureBuffer(),
+    hand: new HandFeatureBuffer(),
+    foot: new FootFeatureBuffer(),
 };

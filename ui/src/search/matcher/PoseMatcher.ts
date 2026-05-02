@@ -10,6 +10,8 @@ export type MatchResult = {
     accepted: boolean;
     center: [number, number, number];
     related: [number, number, number][];
+    scoreP?: number;
+    scoreF?: number;
 };
 
 export default interface PoseMatcher {

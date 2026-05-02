@@ -376,7 +376,7 @@ export default class Renderer {
         return ret;
     }
 
-    createTexture(image: TexImageSource): Texture {
+    createTexture(image: Exclude<TexImageSource, VideoFrame>): Texture {
         const texture = this.createEmptyTexture(image.width, image.height);
         const gl = this.gl;
         gl.bindTexture(gl.TEXTURE_2D, texture.glTexture!);

@@ -1,9 +1,8 @@
 <template>
     <div class="wrapper cols">
         <div class="options">
-            <div class="cols"
-                 style="margin-bottom: 2px;"
-            >
+            <!-- ── Top bar ── -->
+            <div class="cols" style="margin-bottom: 2px;">
                 <button class="link"
                         style="font-size: 14px;"
                         @click="showTutorialDialog = true"
@@ -25,17 +24,52 @@
                     Manage Photos
                 </button>
             </div>
-            <div style="margin-bottom: 2px;">Search in Folder(s):</div>
-            <multi-select :options="paths"
-                          v-model:value="searchPaths"
-                          style="height: 76px;"
-            />
-            <div class="cols"
-                 style="margin-top: 8px;"
-            >
-                <label class="fill"
-                       style="margin-right: 4px;"
-                >
+
+            <!-- ── Gender and Attire radio groups ── -->
+            <div style="margin-bottom: 4px;">Filter:</div>
+            <div class="cols" style="gap: 8px;">
+                <div class="gender-select fill">
+                    <label
+                        v-for="option in ALL_GENDER_FILTERS"
+                        :key="option"
+                        class="gender-option"
+                        :class="{ active: genderFilter === option }"
+                    >
+                        <input
+                            type="radio"
+                            name="gender-filter"
+                            :value="option"
+                            v-model="genderFilter"
+                        />
+                        <span class="gender-label">{{ option }}</span>
+                    </label>
+                </div>
+                <div class="gender-select fill">
+                    <label
+                        v-for="option in ALL_ATTIRE_FILTERS"
+                        :key="option"
+                        class="gender-option"
+                        :class="{ active: attireFilter === option }"
+                    >
+                        <input
+                            type="radio"
+                            name="attire-filter"
+                            :value="option"
+                            v-model="attireFilter"
+                        />
+                        <span class="gender-label">{{ option }}</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Small hint showing how many folders are resolved -->
+            <div class="folder-hint">
+                {{ searchPaths.length }} folder{{ searchPaths.length !== 1 ? 's' : '' }} selected
+            </div>
+
+            <!-- ── Body part + Search ── -->
+            <div class="cols" style="margin-top: 8px;">
+                <label class="fill" style="margin-right: 4px;">
                     <select v-model="bodyPart"
                             required
                             style="width: 100%;"
@@ -45,21 +79,50 @@
                     </select>
                 </label>
                 <button class="primary"
-                        :disabled="!searchPaths.length || !bodyPart"
+                        :disabled="!searchPaths.length || !bodyPart || (bodyPart === 'Custom' && !customJoints.length)"
                         @click="onSearch"
                 >
                     Search
                 </button>
             </div>
+
+            <!-- Custom UI -->
+            <div v-if="bodyPart === 'Custom'" style="margin-top: 8px; border: 1px solid #d9d9d9; padding: 8px; border-radius: 4px; background: #fff;">
+                <div style="font-weight: bold; margin-bottom: 4px;">Custom Pose Filter</div>
+                
+                <div style="margin-bottom: 8px;">
+                    <label style="margin-right: 8px;">
+                        <input type="radio" :value="true" v-model="customCameraRelated"> Camera Related
+                    </label>
+                    <label>
+                        <input type="radio" :value="false" v-model="customCameraRelated"> Camera Ignored
+                    </label>
+                </div>
+
+                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                    <label style="width: 100%; font-weight: bold;">
+                        <input type="checkbox" :checked="customJoints.length === ALL_JOINTS.length" @change="toggleAllCustomJoints"> All
+                    </label>
+                    <label v-for="joint in ALL_JOINTS" :key="joint" style="width: 45%;">
+                        <input type="checkbox" :value="joint" v-model="customJoints"> {{ joint }}
+                    </label>
+                </div>
+            </div>
+
+            <!-- Controls hint -->
             <div style="margin-top: 4px;">
                 <div>Wheel: Rotate Camera / Zoom</div>
                 <div>Mouse Right: Move Camera</div>
                 <div>Shift + Mouse Left: Rotate Joint</div>
             </div>
+
+            <!-- Skeleton canvas -->
             <skeleton-model-canvas style="width: 100%; height: 400px; min-height: 400px; margin-top: 4px;"
                                    :model="model"
                                    :highlights="matchers[bodyPart]?.highlights"
             />
+
+            <!-- Footer -->
             <div style="margin-top: 8px; line-height: 1.5em;">
                 <div style="font-weight: bold;">Pose Search Native</div>
                 <div>Version: 20230202</div>
@@ -73,10 +136,10 @@
                 </div>
             </div>
         </div>
-        <div class="result fill"
-             ref="searchResultsContainerDom"
-        >
-            <image-clip v-for="photo in searchResults"
+
+        <!-- ── Search results ── -->
+        <div class="result fill" ref="searchResultsContainerDom">
+            <image-clip v-for="photo in pagedData"
                         class="item"
                         :src="photo.url"
                         :width="200"
@@ -88,6 +151,15 @@
                         :flip="photo.flipped"
                         @click="onClickPhoto(photo)"
             />
+			<div class="example-pagination-block">
+                <el-pagination
+                    layout="prev, pager, next" 
+                    v-model:current-page="currentPage"
+                    :page-size="pageSize"
+                    :total="searchResults.length"
+                    @current-change="handlePageChange"
+                />
+            </div>
         </div>
     </div>
 
@@ -117,17 +189,6 @@
         height: 100%;
         margin-right: 4px;
         overflow: auto;
-
-        label {
-            display: inline-flex;
-            align-items: center;
-            color: #000;
-
-            input {
-                margin-top: 0;
-                margin-bottom: 0;
-            }
-        }
     }
 
     .result {
@@ -143,5 +204,70 @@
             margin: 0 4px 4px;
         }
     }
+}
+
+/* ── Gender radio group ────────────────────────────────────────────────────── */
+.gender-select {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    box-sizing: border-box;
+    padding: 6px 8px;
+    border: solid 1px #D9D9D9;
+    border-radius: 4px;
+    background: #fff;
+}
+
+.gender-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    color: #000;
+    padding: 2px 0;
+
+    /* Hide the native radio and replace with a styled circle */
+    input[type="radio"] {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 2px solid #767676;
+        background: #fff;
+        flex-shrink: 0;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+
+        &:checked {
+            border-color: #1979CA;
+            background: #1979CA;
+            box-shadow: inset 0 0 0 3px #fff;
+        }
+    }
+
+    &.active .gender-label {
+        font-weight: 600;
+        color: #1979CA;
+    }
+
+    .gender-label {
+        user-select: none;
+    }
+}
+
+/* Small resolved-folder count hint */
+.folder-hint {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #aaa;
+}
+
+.example-pagination-block{
+    position: absolute;
+    margin-bottom: 16px;
+    bottom: 0;
+    right: 16px;
+    z-index: 999;
 }
 </style>

@@ -19,13 +19,15 @@ const MAX_ERROR = Math.PI / 180 * 45;
 export default class ShoulderMatcher implements PoseMatcher {
 
     private isLeft: boolean;
+    private cameraRelated: boolean;
 
     private shoulderLocalDir: [number, number, number] = [0, 0, 0];
     private shoulderLocalDirMirror: [number, number, number] = [0, 0, 0];
     private chestRotation: [number, number, number, number] = [0, 0, 0, 1];
 
-    constructor(isLeft: boolean) {
+    constructor(isLeft: boolean, cameraRelated: boolean = true) {
         this.isLeft = isLeft;
+        this.cameraRelated = cameraRelated;
     }
 
     prepare(model: SkeletonModel): void {
@@ -89,24 +91,44 @@ export default class ShoulderMatcher implements PoseMatcher {
         const shoulderErrR = angleBetweenVec3(rightUpperArmDir, !this.isLeft ? this.shoulderLocalDir : this.shoulderLocalDirMirror);
         const chestErrR = getQuatDistance(this.chestRotation, !this.isLeft ? chestRotation : getQuatMirrorX(chestRotation));
 
-        let scoreL = (Math.PI - shoulderErrL) * (Math.PI - chestErrL);
-        let scoreR = (Math.PI - shoulderErrR) * (Math.PI - chestErrR);
-        if (isVecZero(leftUpperArmDir) || shoulderErrL > MAX_ERROR || chestErrL > MAX_ERROR) {
+        let scoreL = 0;
+        if (this.cameraRelated) {
+            scoreL = (Math.PI - shoulderErrL) * (Math.PI - chestErrL);
+        } else {
+            scoreL = Math.PI - shoulderErrL;
+        }
+
+        let scoreR = 0;
+        if (this.cameraRelated) {
+            scoreR = (Math.PI - shoulderErrR) * (Math.PI - chestErrR);
+        } else {
+            scoreR = Math.PI - shoulderErrR;
+        }
+
+        if (isVecZero(leftUpperArmDir) || shoulderErrL > MAX_ERROR) {
+            scoreL = -Infinity;
+        } else if (this.cameraRelated && chestErrL > MAX_ERROR) {
             scoreL = -Infinity;
         }
-        if (isVecZero(rightUpperArmDir) || shoulderErrR > MAX_ERROR || chestErrR > MAX_ERROR) {
+
+        if (isVecZero(rightUpperArmDir) || shoulderErrR > MAX_ERROR) {
+            scoreR = -Infinity;
+        } else if (this.cameraRelated && chestErrR > MAX_ERROR) {
             scoreR = -Infinity;
         }
 
+        result.scoreP = scoreL;
+        result.scoreF = scoreR;
+        result.accepted = isFinite(scoreL) || isFinite(scoreR);
+        if (!result.accepted) return;
+
         const landmarks = photo.normalized;
         if (isFinite(scoreL) && scoreL > scoreR) {
-            result.accepted = true;
             result.score = scoreL;
             result.flipped = !this.isLeft;
             result.center = landmarks[11];
             result.related = [landmarks[12], landmarks[13], mid(landmarks[23], landmarks[11])];
         } else if (isFinite(scoreR)) {
-            result.accepted = true;
             result.score = scoreR;
             result.flipped = this.isLeft;
             result.center = landmarks[12];

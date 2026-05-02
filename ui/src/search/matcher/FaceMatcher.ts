@@ -8,7 +8,12 @@ const MAX_ERROR = Math.PI / 180 * 45;
 
 export default class FaceMatcher implements PoseMatcher {
 
-    private rotation: [number, number, number, number] = [0, 0, 0, 0];
+    private cameraRelated: boolean;
+    private rotation:[number, number, number, number] = [0, 0, 0, 0];
+
+    constructor(cameraRelated: boolean = true) {
+        this.cameraRelated = cameraRelated;
+    }
 
     prepare(model: SkeletonModel): void {
         const leftEar = model.head.landmarksViewPosition[0];
@@ -19,32 +24,13 @@ export default class FaceMatcher implements PoseMatcher {
     }
 
     match(result: MatchResult, photo: PhotoPoseLandmarks, buffers: FeatureBuffers, index: number): void {
-        const rotation = featureBuffers.face.getFaceRotation(buffers.face, index);
-        if (isQuatZero(rotation)) {
-            return;
-        }
-        const errorP = getQuatDistance(this.rotation, rotation);
-        const errorF = getQuatDistance(this.rotation, getQuatMirrorX(rotation));
-        if (errorF > MAX_ERROR && errorP > MAX_ERROR) {
-            return;
-        }
-        const scoreP = Math.PI - errorP;
-        const scoreF = Math.PI - errorF;
-        result.accepted = true;
-        if (scoreP > scoreF) {
-            result.score = scoreP;
-        } else {
-            result.score = scoreF;
-            result.flipped = true;
-        }
-
         const landmarks = photo.normalized;
         const xl = Math.min(landmarks[8][0], landmarks[7][0]);
         const xh = Math.max(landmarks[8][0], landmarks[7][0]);
         const xRange = xh - xl;
         const xPadding = xRange * 0.5;
         const yl = Math.min(landmarks[6][1], landmarks[3][1], landmarks[10][1], landmarks[9][1]);
-        const yh = Math.min(landmarks[6][1], landmarks[3][1], landmarks[10][1], landmarks[9][1]);
+        const yh = Math.max(landmarks[6][1], landmarks[3][1], landmarks[10][1], landmarks[9][1]);
         const yRange = yh - yl;
         const yPadding = yRange * 0.5;
         result.center = mid(landmarks[0]);
@@ -58,6 +44,38 @@ export default class FaceMatcher implements PoseMatcher {
             [landmarks[0][0], yl - yPadding, landmarks[0][2]],
             [landmarks[0][0], yh + yPadding, landmarks[0][2]],
         ];
+
+        if (!this.cameraRelated) {
+            result.scoreP = 0;
+            result.scoreF = 0;
+            result.accepted = true;
+            result.score = 0;
+            result.flipped = false;
+            return;
+        }
+
+        const rotation = featureBuffers.face.getFaceRotation(buffers.face, index);
+        if (isQuatZero(rotation)) {
+            result.accepted = false;
+            return;
+        }
+        const errorP = getQuatDistance(this.rotation, rotation);
+        const errorF = getQuatDistance(this.rotation, getQuatMirrorX(rotation));
+        
+        const scoreP = Math.PI - errorP;
+        const scoreF = Math.PI - errorF;
+        result.scoreP = errorP <= MAX_ERROR ? scoreP : -Infinity;
+        result.scoreF = errorF <= MAX_ERROR ? scoreF : -Infinity;
+        result.accepted = result.scoreP !== -Infinity || result.scoreF !== -Infinity;
+        if (!result.accepted) return;
+
+        if (scoreP > scoreF) {
+            result.score = scoreP;
+            result.flipped = false;
+        } else {
+            result.score = scoreF;
+            result.flipped = true;
+        }
     }
 
 }
