@@ -1,9 +1,10 @@
 {
   "scripts": "dist/index.js",
-  "targets":["node18-win-x64"],
+  "targets": ["node18-win-x64"],
   "outputPath": "dist",
   "assets":[
     "public/**/*",
-    "public/**"
+    "public/**",
+    "node_modules/better-sqlite3/build/Release/better_sqlite3.node"
   ]
 }
