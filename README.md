@@ -4,8 +4,7 @@ This is the native version of [Pose Search](x6ud.github.io/pose-search) for loca
 
 ## Download
 
-[Windows](https://github.com/x6ud/pose-search-native/releases)
-
+[Windows](https://github.com/10zindraws/pose-search-native/releases)
 For Linux and macOS: I only have a windows machine so please try to build it yourself 😓
 
 ## Problems
