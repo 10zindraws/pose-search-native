@@ -82,7 +82,7 @@
                 <div class="item cols"
                      v-for="(folder, index) in dataset.folders"
                      :key="folder.path"
-                     :class="{ selected: checked[folder.path] }"
+                     :class="{ selected: checked[folder.path], disabled: folder.disabled }"
                      @mousedown="onMouseDown($event, index, folder.path)"
                      @mouseenter="onMouseEnter($event, index, folder.path)"
                 >
@@ -93,6 +93,9 @@
                     <div class="record-count">{{ folder.records.length }} Poses / {{ (folder.records.length + (folder.discard?.length || 0)) }} Scanned</div>
                     <div class="label-pill">{{ dataset.getGenderForPath(folder.path) || 'Unknown' }}</div>
                     <div class="label-pill">{{ dataset.getAttireForPath(folder.path) || 'Unknown' }}</div>
+                    <div class="label-pill" :class="folder.disabled ? 'status-disabled' : 'status-enabled'">
+                        {{ folder.disabled ? 'Disabled' : 'Enabled' }}
+                    </div>
                 </div>
             </div>
         </div>
@@ -102,7 +105,8 @@
                     Remove Selected
                 </button>
                 <div class="fill"></div>
-                <button class="normal" @click="$emit('update:visible', false)">Close</button>
+                <button class="normal" @click="onDisableSelected" :disabled="!anyChecked">Disable</button>
+                <button class="primary" style="margin-left: 8px;" @click="onEnableSelected" :disabled="!anyChecked">Enable</button>
             </div>
         </template>
     </popup-dialog>
@@ -151,6 +155,20 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
+
+        &.disabled {
+            color: #aaa;
+            text-decoration: line-through;
+            background-color: #fafafa;
+
+            &:hover {
+                background-color: #f0f0f0;
+            }
+
+            &.selected {
+                background-color: #f0e6e6;
+            }
+        }
     }
 }
 
@@ -191,6 +209,15 @@
     font-weight: 500;
     min-width: 60px;
     text-align: center;
+
+    &.status-enabled {
+        background-color: #e4f2e3;
+        color: #3a7538;
+    }
+    &.status-disabled {
+        background-color: #fce3e3;
+        color: #9b3e3e;
+    }
 }
 
 .pill-label {

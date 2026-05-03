@@ -22,12 +22,17 @@ export class DatasetFolder {
     recordsLoaded: boolean = false;
     landmarksLoaded: boolean = false;
     discard?: string[];
+    disabled?: boolean;
 }
 
 // ─── Dataset JSON shape ──────────────────────────────────────────────────────
 
 type DatasetJson =
-    | { folders: { Female?: string[]; Male?: string[] }, attireFolders?: { 'Nude/Undies'?: string[]; Clothed?: string[] } }
+    | {
+    folders: { Female?: string[]; Male?: string[] },
+    attireFolders?: { 'Nude/Undies'?: string[]; Clothed?: string[] },
+    disabledFolders?: string[]
+}
     | { folders: string[] };
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
@@ -72,6 +77,9 @@ const dataset = reactive({
 
     /** Serialise current state to dataset.json via the server. */
     async save() {
+        const disabledFolders = this.folders
+            .filter(f => f.disabled)
+            .map(f => f.path);
         await request('/ds/dataset', {
             method: 'post',
             body: JSON.stringify({
@@ -82,7 +90,8 @@ const dataset = reactive({
                 attireFolders: {
                     'Nude/Undies': this.attireFolders['Nude/Undies'],
                     'Clothed': this.attireFolders.Clothed,
-                }
+                },
+                disabledFolders: disabledFolders
             }),
             headers: {'Content-Type': 'application/json'}
         });
@@ -121,6 +130,15 @@ const dataset = reactive({
         }
 
         this._rebuildFolders();
+
+        if ('disabledFolders' in json && Array.isArray(json.disabledFolders)) {
+            const disabledSet = new Set(json.disabledFolders);
+            this.folders.forEach(folder => {
+                if (disabledSet.has(folder.path)) {
+                    folder.disabled = true;
+                }
+            });
+        }
     },
 
     _rebuildFolders() {
@@ -160,16 +178,19 @@ const dataset = reactive({
     },
 
     getPathsForFilter(genderFilter: GenderFilter, attireFilter: AttireFilter): string[] {
-        let genderPaths = genderFilter === 'Both' 
+        let genderPaths = genderFilter === 'Both'
             ?[...this.genderFolders.Female, ...this.genderFolders.Male]
             :[...this.genderFolders[genderFilter]];
-            
+
         let attirePaths = attireFilter === 'Both'
             ? [...this.attireFolders['Nude/Undies'], ...this.attireFolders.Clothed]
             : [...this.attireFolders[attireFilter]];
-            
+
         const attireSet = new Set(attirePaths);
-        return genderPaths.filter(p => attireSet.has(p));
+        const combinedPaths = genderPaths.filter(p => attireSet.has(p));
+
+        const disabledSet = new Set(this.folders.filter(f => f.disabled).map(f => f.path));
+        return combinedPaths.filter(p => !disabledSet.has(p));
     },
 
     assignGender(path: string, gender: GenderCategory) {

@@ -11,7 +11,7 @@ export default defineComponent({
         visible: Boolean,
     },
     emits:['update:visible'],
-    setup() {
+    setup(props, { emit }) {
         const dataset = useDataset();
 
         const checked = reactive<{[path: string]: boolean }>({});
@@ -36,11 +36,19 @@ export default defineComponent({
                 dataset.loadFolderRecords(folder.path);
             }
             window.addEventListener('mouseup', onMouseUp);
+            window.addEventListener('keydown', onKeyDown);
         });
 
         onBeforeUnmount(() => {
             window.removeEventListener('mouseup', onMouseUp);
+            window.removeEventListener('keydown', onKeyDown);
         });
+
+        function onKeyDown(event: KeyboardEvent) {
+            if (props.visible && event.key === 'Escape') {
+                emit('update:visible', false);
+            }
+        }
 
         async function onAddFolder() {
             let path = await showSelectFolderDialog();
@@ -110,7 +118,7 @@ export default defineComponent({
             const selectedPaths = Object.keys(checked).filter(p => checked[p]);
             if (!selectedPaths.length) return;
             
-            const msg = selectedPaths.length > 1 
+            const msg = selectedPaths.length > 1
                 ? "Are you sure you want to remove the folders from the list (won't delete files)?"
                 : "Are you sure you want to remove the folder from the list (won't delete files)?";
                 
@@ -148,6 +156,32 @@ export default defineComponent({
                 }
                 showAlertDialog("Discarded lists cleared.");
             }
+        }
+
+        async function onEnableSelected() {
+            const selectedPaths = Object.keys(checked).filter(p => checked[p]);
+            if (!selectedPaths.length) return;
+
+            for (const path of selectedPaths) {
+                const folder = dataset.getFolder(path);
+                if (folder) {
+                    folder.disabled = false;
+                }
+            }
+            await dataset.save();
+        }
+
+        async function onDisableSelected() {
+            const selectedPaths = Object.keys(checked).filter(p => checked[p]);
+            if (!selectedPaths.length) return;
+
+            for (const path of selectedPaths) {
+                const folder = dataset.getFolder(path);
+                if (folder) {
+                    folder.disabled = true;
+                }
+            }
+            await dataset.save();
         }
 
         let lastSelectedIndex = -1;
@@ -222,6 +256,8 @@ export default defineComponent({
             onClearDiscarded,
             onMouseDown,
             onMouseEnter,
+            onEnableSelected,
+            onDisableSelected,
         };
     }
 });
